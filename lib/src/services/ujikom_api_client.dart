@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../models/api_models.dart';
 import '../models/auth_user.dart';
 import '../models/chapter_detail.dart';
 import '../models/work.dart';
@@ -18,6 +19,8 @@ class UjikomApiClient {
   final String? authToken;
   final http.Client _httpClient;
 
+  bool get hasAuthToken => authToken != null && authToken!.isNotEmpty;
+
   UjikomApiClient copyWith({
     String? baseUrl,
     String? authToken,
@@ -29,12 +32,82 @@ class UjikomApiClient {
     );
   }
 
-  Future<List<WorkSummary>> fetchWorks() async {
-    final json = await _getJson('/works');
+  Future<HomeFeed> fetchHome({
+    int? genreId,
+    int perPage = 12,
+  }) async {
+    final json = await _getJson(
+      '/home',
+      queryParameters: {
+        if (genreId != null) 'genre': '$genreId',
+        'per_page': '$perPage',
+      },
+    );
+
+    final rawGenres = json['genres'] as List<dynamic>? ?? const [];
+    final rawData = json['data'] as List<dynamic>? ?? const [];
+    final selectedGenreJson = json['selected_genre'] as Map<String, dynamic>?;
+
+    return HomeFeed(
+      items: rawData
+          .map((item) => WorkSummary.fromJson(item as Map<String, dynamic>))
+          .toList(),
+      meta: ApiPageMeta.fromJson(
+          json['meta'] as Map<String, dynamic>? ?? const {}),
+      genres: rawGenres
+          .map((item) => GenreItem.fromJson(item as Map<String, dynamic>))
+          .toList(),
+      selectedGenre: selectedGenreJson == null
+          ? null
+          : GenreItem.fromJson(selectedGenreJson),
+    );
+  }
+
+  Future<List<WorkSummary>> fetchWorks({
+    String? query,
+    String? type,
+    int? genreId,
+  }) async {
+    final json = await _getJson(
+      '/works',
+      queryParameters: {
+        if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+        if (type != null && type.isNotEmpty) 'type': type,
+        if (genreId != null) 'genre_id': '$genreId',
+      },
+    );
     final rawData = json['data'] as List<dynamic>? ?? const [];
 
     return rawData
         .map((item) => WorkSummary.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<WorkSummary>> searchWorks({
+    String? query,
+    String? type,
+    int? genreId,
+  }) async {
+    final json = await _getJson(
+      '/search',
+      queryParameters: {
+        if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+        if (type != null && type.isNotEmpty) 'type': type,
+        if (genreId != null) 'genre_id': '$genreId',
+      },
+    );
+    final rawData = json['data'] as List<dynamic>? ?? const [];
+
+    return rawData
+        .map((item) => WorkSummary.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<GenreItem>> fetchGenres() async {
+    final json = await _getJson('/genres');
+    final rawData = json['data'] as List<dynamic>? ?? const [];
+    return rawData
+        .map((item) => GenreItem.fromJson(item as Map<String, dynamic>))
         .toList();
   }
 
@@ -49,6 +122,101 @@ class UjikomApiClient {
   }) async {
     final json = await _getJson('/works/$workId/chapters/$chapterId');
     return ChapterDetail.fromJson(json['data'] as Map<String, dynamic>);
+  }
+
+  Future<List<FaqItem>> fetchFaq() async {
+    final json = await _getJson('/faq');
+    final rawData = json['data'] as List<dynamic>? ?? const [];
+    return rawData
+        .map((item) => FaqItem.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<NewsItem>> fetchNews() async {
+    final json = await _getJson('/news');
+    final rawData = json['data'] as List<dynamic>? ?? const [];
+    return rawData
+        .map((item) => NewsItem.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<CollectionBundle> fetchCollection() async {
+    final path = hasAuthToken ? '/me/collection' : '/collection';
+    final json = await _getJson(path, requiresAuth: hasAuthToken);
+    return CollectionBundle.fromJson(json['data'] as Map<String, dynamic>);
+  }
+
+  Future<NotificationBundle> fetchNotifications() async {
+    final path = hasAuthToken ? '/me/notifications' : '/notifications';
+    final json = await _getJson(path, requiresAuth: hasAuthToken);
+    return NotificationBundle.fromJson(json['data'] as Map<String, dynamic>);
+  }
+
+  Future<List<BookmarkEntry>> fetchBookmarks() async {
+    final json = await _getJson('/bookmarks', requiresAuth: true);
+    final rawData = json['data'] as List<dynamic>? ?? const [];
+    return rawData
+        .map((item) => BookmarkEntry.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> addBookmark(
+    int workId, {
+    int? lastChapterRead,
+  }) async {
+    await _postJson(
+      '/works/$workId/bookmark',
+      requiresAuth: true,
+      body: {
+        if (lastChapterRead != null) 'last_chapter_read': lastChapterRead,
+      },
+    );
+  }
+
+  Future<void> removeBookmark(int workId) async {
+    await _deleteJson('/works/$workId/bookmark', requiresAuth: true);
+  }
+
+  Future<List<HistoryEntry>> fetchHistory() async {
+    final json = await _getJson('/history', requiresAuth: true);
+    final rawData = json['data'] as List<dynamic>? ?? const [];
+    return rawData
+        .map((item) => HistoryEntry.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> storeReadingProgress({
+    required int workId,
+    required int chapterId,
+  }) async {
+    await _postJson(
+      '/works/$workId/chapters/$chapterId/progress',
+      requiresAuth: true,
+    );
+  }
+
+  Future<List<ChapterComment>> fetchChapterComments(int chapterId) async {
+    final json = await _getJson('/chapters/$chapterId/comments');
+    final rawData = json['data'] as List<dynamic>? ?? const [];
+    return rawData
+        .map((item) => ChapterComment.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<ChapterComment> postChapterComment({
+    required int chapterId,
+    required String content,
+  }) async {
+    final json = await _postJson(
+      '/chapters/$chapterId/comments',
+      requiresAuth: true,
+      body: {'content': content},
+    );
+    return ChapterComment.fromJson(json['data'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteComment(int commentId) async {
+    await _deleteJson('/comments/$commentId', requiresAuth: true);
   }
 
   Future<AuthSession> register({
@@ -92,11 +260,195 @@ class UjikomApiClient {
     await _postJson('/logout', requiresAuth: true);
   }
 
+  Future<AdminDashboardData> fetchAdminDashboard() async {
+    final json = await _getJson('/admin/dashboard', requiresAuth: true);
+    return AdminDashboardData.fromJson(json['data'] as Map<String, dynamic>);
+  }
+
+  Future<List<RoleOption>> fetchAdminRoles() async {
+    final json = await _getJson('/admin/roles', requiresAuth: true);
+    final rawData = json['data'] as List<dynamic>? ?? const [];
+    return rawData
+        .map((item) => RoleOption.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<AdminUsersResponse> fetchAdminUsers({
+    String? query,
+    String? role,
+    int? roleId,
+    int perPage = 15,
+  }) async {
+    final json = await _getJson(
+      '/admin/users',
+      requiresAuth: true,
+      queryParameters: {
+        if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+        if (role != null && role.isNotEmpty) 'role': role,
+        if (roleId != null) 'role_id': '$roleId',
+        'per_page': '$perPage',
+      },
+    );
+
+    final users = (json['data'] as List<dynamic>? ?? const [])
+        .map((item) => AdminUserItem.fromJson(item as Map<String, dynamic>))
+        .toList();
+    final roles = (json['roles'] as List<dynamic>? ?? const [])
+        .map((item) => RoleOption.fromJson(item as Map<String, dynamic>))
+        .toList();
+
+    return AdminUsersResponse(
+      users: users,
+      roles: roles,
+      meta: ApiPageMeta.fromJson(
+          json['meta'] as Map<String, dynamic>? ?? const {}),
+    );
+  }
+
+  Future<List<GenreItem>> fetchAdminGenres({
+    String? query,
+  }) async {
+    final json = await _getJson(
+      '/admin/genres',
+      requiresAuth: true,
+      queryParameters: {
+        if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+      },
+    );
+    final rawData = json['data'] as List<dynamic>? ?? const [];
+    return rawData
+        .map((item) => GenreItem.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<WorksPageResponse> fetchAdminWorks({
+    String? status,
+    String? type,
+    String? query,
+  }) async {
+    final path = status == 'pending' ? '/admin/works/pending' : '/admin/works';
+    final json = await _getJson(
+      path,
+      requiresAuth: true,
+      queryParameters: {
+        if (status != null && status != 'pending' && status.isNotEmpty)
+          'status': status,
+        if (type != null && type.isNotEmpty) 'type': type,
+        if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+      },
+    );
+    return WorksPageResponse(
+      items: (json['data'] as List<dynamic>? ?? const [])
+          .map((item) => WorkSummary.fromJson(item as Map<String, dynamic>))
+          .toList(),
+      meta: ApiPageMeta.fromJson(
+          json['meta'] as Map<String, dynamic>? ?? const {}),
+      summary: WorksSummary.fromJson(
+        json['summary'] as Map<String, dynamic>? ?? const {},
+      ),
+    );
+  }
+
+  Future<List<ChapterSummary>> fetchAdminChapters({
+    int? workId,
+    String? type,
+    String? query,
+  }) async {
+    final json = await _getJson(
+      '/admin/chapters',
+      requiresAuth: true,
+      queryParameters: {
+        if (workId != null) 'work_id': '$workId',
+        if (type != null && type.isNotEmpty) 'type': type,
+        if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+      },
+    );
+    final rawData = json['data'] as List<dynamic>? ?? const [];
+    return rawData
+        .map((item) => ChapterSummary.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchAdminChapterImages({
+    int? workId,
+    int? chapterId,
+  }) async {
+    final json = await _getJson(
+      '/admin/chapter-images',
+      requiresAuth: true,
+      queryParameters: {
+        if (workId != null) 'work_id': '$workId',
+        if (chapterId != null) 'chapter_id': '$chapterId',
+      },
+    );
+    final rawData = json['data'] as List<dynamic>? ?? const [];
+    return rawData.cast<Map<String, dynamic>>();
+  }
+
+  Future<void> approveAdminWork(int workId) async {
+    await _postJson('/admin/works/$workId/approve', requiresAuth: true);
+  }
+
+  Future<void> rejectAdminWork(int workId) async {
+    await _postJson('/admin/works/$workId/reject', requiresAuth: true);
+  }
+
+  Future<void> deleteAdminWork(int workId) async {
+    await _deleteJson('/admin/works/$workId', requiresAuth: true);
+  }
+
+  Future<UploaderDashboardData> fetchUploaderDashboard() async {
+    final json = await _getJson('/uploader/dashboard', requiresAuth: true);
+    return UploaderDashboardData.fromJson(json['data'] as Map<String, dynamic>);
+  }
+
+  Future<WorksPageResponse> fetchUploaderWorks({
+    String? status,
+    String? type,
+    String? query,
+  }) async {
+    final json = await _getJson(
+      '/uploader/works',
+      requiresAuth: true,
+      queryParameters: {
+        if (status != null && status.isNotEmpty) 'status': status,
+        if (type != null && type.isNotEmpty) 'type': type,
+        if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+      },
+    );
+    return WorksPageResponse(
+      items: (json['data'] as List<dynamic>? ?? const [])
+          .map((item) => WorkSummary.fromJson(item as Map<String, dynamic>))
+          .toList(),
+      meta: ApiPageMeta.fromJson(
+          json['meta'] as Map<String, dynamic>? ?? const {}),
+      summary: WorksSummary.fromJson(
+        json['summary'] as Map<String, dynamic>? ?? const {},
+      ),
+    );
+  }
+
+  Future<List<ChapterSummary>> fetchUploaderChapters(int workId) async {
+    final json = await _getJson(
+      '/uploader/works/$workId/chapters',
+      requiresAuth: true,
+    );
+    final rawData = json['data'] as List<dynamic>? ?? const [];
+    return rawData
+        .map((item) => ChapterSummary.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<Map<String, dynamic>> _getJson(
     String path, {
     bool requiresAuth = false,
+    Map<String, String>? queryParameters,
   }) async {
-    final uri = Uri.parse('$_baseUrl$path');
+    final uri = Uri.parse('$_baseUrl$path').replace(
+      queryParameters: queryParameters == null || queryParameters.isEmpty
+          ? null
+          : queryParameters,
+    );
     final response = await _httpClient.get(
       uri,
       headers: _headers(requiresAuth: requiresAuth),
@@ -115,6 +467,19 @@ class UjikomApiClient {
       uri,
       headers: _headers(requiresAuth: requiresAuth),
       body: body == null ? null : jsonEncode(body),
+    );
+
+    return _decodeResponse(response);
+  }
+
+  Future<Map<String, dynamic>> _deleteJson(
+    String path, {
+    bool requiresAuth = false,
+  }) async {
+    final uri = Uri.parse('$_baseUrl$path');
+    final response = await _httpClient.delete(
+      uri,
+      headers: _headers(requiresAuth: requiresAuth),
     );
 
     return _decodeResponse(response);
@@ -149,18 +514,19 @@ class UjikomApiClient {
         }
         throw ApiException(
           message ??
-              'Request gagal (${response.statusCode}). Pastikan URL API Laravel sudah benar.',
+              'Request gagal (${response.statusCode}). Pastikan API Laravel aktif dan token valid.',
         );
       }
 
       throw ApiException(
-        'Request gagal (${response.statusCode}). Pastikan URL API Laravel sudah benar.',
+        'Request gagal (${response.statusCode}). Pastikan API Laravel aktif dan token valid.',
       );
     }
 
     if (decoded is! Map<String, dynamic>) {
       throw const ApiException(
-          'Response API tidak sesuai format yang diharapkan.');
+        'Response API tidak sesuai format yang diharapkan.',
+      );
     }
 
     return decoded;

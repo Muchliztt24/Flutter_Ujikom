@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiConfigStore {
@@ -13,11 +14,19 @@ class ApiConfigStore {
 
   Future<String> loadBaseUrl() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_baseUrlKey) ?? presets.first;
+    return prefs.getString(_baseUrlKey) ?? _defaultBaseUrl();
   }
 
   Future<void> saveBaseUrl(String value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_baseUrlKey, value);
+  }
+
+  String _defaultBaseUrl() {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:8000/api';
+    }
+
+    return presets.first;
   }
 }

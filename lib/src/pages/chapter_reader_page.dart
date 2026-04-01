@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../models/api_models.dart';
 import '../models/chapter_detail.dart';
+import '../models/library_entry.dart';
+import '../services/library_store.dart';
 import '../services/ujikom_api_client.dart';
 import '../widgets/network_cover.dart';
 
@@ -21,28 +24,97 @@ class ChapterReaderPage extends StatefulWidget {
 }
 
 class _ChapterReaderPageState extends State<ChapterReaderPage> {
+  final LibraryStore _libraryStore = LibraryStore();
+  final TextEditingController _commentController = TextEditingController();
   late Future<ChapterDetail> _future;
+  late Future<List<ChapterComment>> _commentsFuture;
   bool _immersive = false;
+  bool _submittingComment = false;
 
   @override
   void initState() {
     super.initState();
     _future = _load();
+    _commentsFuture = widget.apiClient.fetchChapterComments(widget.chapterId);
+  }
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
   }
 
   Future<ChapterDetail> _load() {
-    return widget.apiClient.fetchChapter(
+    return widget.apiClient
+        .fetchChapter(
       workId: widget.workId,
       chapterId: widget.chapterId,
-    );
+    )
+        .then((chapter) async {
+      await _libraryStore.addHistoryEntry(
+        ReadingHistoryEntry(
+          workId: chapter.workId,
+          workTitle: chapter.workTitle,
+          workType: chapter.hasImages ? 'comic' : 'novel',
+          workCoverUrl:
+              chapter.images.isNotEmpty ? chapter.images.first.imageUrl : null,
+          chapterId: chapter.id,
+          chapterNumber: chapter.chapterNumber,
+          chapterTitle: chapter.title,
+          readAtIso: DateTime.now().toIso8601String(),
+        ),
+      );
+      if (widget.apiClient.hasAuthToken) {
+        await widget.apiClient.storeReadingProgress(
+          workId: chapter.workId,
+          chapterId: chapter.id,
+        );
+      }
+      return chapter;
+    });
   }
 
   Future<void> _refresh() async {
     final next = _load();
     setState(() {
       _future = next;
+      _commentsFuture = widget.apiClient.fetchChapterComments(widget.chapterId);
     });
     await next;
+  }
+
+  Future<void> _submitComment() async {
+    final content = _commentController.text.trim();
+    if (content.isEmpty || !widget.apiClient.hasAuthToken) {
+      return;
+    }
+
+    setState(() => _submittingComment = true);
+    try {
+      await widget.apiClient.postChapterComment(
+        chapterId: widget.chapterId,
+        content: content,
+      );
+      _commentController.clear();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _commentsFuture =
+            widget.apiClient.fetchChapterComments(widget.chapterId);
+      });
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _submittingComment = false);
+      }
+    }
   }
 
   @override
@@ -161,6 +233,157 @@ class _ChapterReaderPageState extends State<ChapterReaderPage> {
                   ),
                 ),
               ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                child: _CommentsCard(
+                  commentsFuture: _commentsFuture,
+                  apiClient: widget.apiClient,
+                  controller: _commentController,
+                  submitting: _submittingComment,
+                  onSubmit: _submitComment,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CommentsCard extends StatelessWidget {
+  const _CommentsCard({
+    required this.commentsFuture,
+    required this.apiClient,
+    required this.controller,
+    required this.submitting,
+    required this.onSubmit,
+  });
+
+  final Future<List<ChapterComment>> commentsFuture;
+  final UjikomApiClient apiClient;
+  final TextEditingController controller;
+  final bool submitting;
+  final Future<void> Function() onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Komentar',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFFE8EAED),
+              ),
+            ),
+            const SizedBox(height: 14),
+            if (apiClient.hasAuthToken) ...[
+              TextField(
+                controller: controller,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  hintText: 'Tulis komentar untuk chapter ini',
+                ),
+              ),
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton.icon(
+                  onPressed: submitting ? null : onSubmit,
+                  icon: const Icon(Icons.send_rounded),
+                  label: submitting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Kirim'),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ] else
+              const Padding(
+                padding: EdgeInsets.only(bottom: 16),
+                child: Text(
+                  'Login untuk ikut berdiskusi di komentar.',
+                  style: TextStyle(color: Color(0xFF9AA0A6)),
+                ),
+              ),
+            FutureBuilder<List<ChapterComment>>(
+              future: commentsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: CircularProgressIndicator(),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return Text(
+                    snapshot.error.toString(),
+                    style: const TextStyle(color: Color(0xFF9AA0A6)),
+                  );
+                }
+
+                final comments = snapshot.requireData;
+                if (comments.isEmpty) {
+                  return const Text(
+                    'Belum ada komentar.',
+                    style: TextStyle(color: Color(0xFF9AA0A6)),
+                  );
+                }
+
+                return Column(
+                  children: comments
+                      .map(
+                        (comment) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF111827),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: const Color(0xFF2D3748),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  comment.user?.name ?? 'Pembaca',
+                                  style: const TextStyle(
+                                    color: Color(0xFFE8EAED),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  comment.content,
+                                  style: const TextStyle(
+                                    color: Color(0xFFCBD5E1),
+                                    height: 1.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                );
+              },
+            ),
           ],
         ),
       ),

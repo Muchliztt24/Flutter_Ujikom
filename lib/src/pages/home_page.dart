@@ -1,18 +1,17 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../models/auth_user.dart';
 import '../models/work.dart';
 import '../services/api_config_store.dart';
 import '../services/auth_session_store.dart';
-import '../services/laravel_web_links.dart';
 import '../services/ujikom_api_client.dart';
 import '../widgets/network_cover.dart';
 import '../widgets/nokomi_brand.dart';
 import 'auth_page.dart';
 import 'role_portal_page.dart';
+import 'simple_pages.dart';
 import 'work_detail_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -73,12 +72,20 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
+    final future = _createClientFor(baseUrl, verifiedSession).fetchWorks();
+
     setState(() {
       _baseUrl = baseUrl;
       _session = verifiedSession;
-      _worksFuture = _createClient().fetchWorks();
+      _worksFuture = future;
     });
   }
+
+  UjikomApiClient _createClientFor(String baseUrl, AuthSession? session) =>
+      UjikomApiClient(
+        baseUrl: baseUrl,
+        authToken: session?.token,
+      );
 
   UjikomApiClient _createClient() => UjikomApiClient(
         baseUrl: _baseUrl,
@@ -91,83 +98,6 @@ class _HomePageState extends State<HomePage> {
       _worksFuture = future;
     });
     await future;
-  }
-
-  Future<void> _openApiConfig() async {
-    final controller = TextEditingController(text: _baseUrl);
-
-    final result = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF1A1F2E),
-      showDragHandle: true,
-      builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 8,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Konfigurasi API',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Pilih preset URL Laravel yang ingin dipakai.',
-                style: TextStyle(color: Color(0xFF9AA0A6)),
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final preset in ApiConfigStore.presets)
-                    ActionChip(
-                      label: Text(preset),
-                      onPressed: () => controller.text = preset,
-                    ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: controller,
-                decoration: const InputDecoration(
-                  labelText: 'Base URL API',
-                ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () => Navigator.pop(context, controller.text),
-                  child: const Text('Simpan'),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    controller.dispose();
-
-    if (result == null || result.trim().isEmpty || !mounted) {
-      return;
-    }
-
-    await _configStore.saveBaseUrl(result.trim());
-    setState(() {
-      _baseUrl = result.trim();
-      _worksFuture = _createClient().fetchWorks();
-    });
   }
 
   Future<void> _openAuthPage() async {
@@ -188,6 +118,25 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  Future<void> _openRolePortal() async {
+    if (_session == null) {
+      return;
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => RolePortalPage(
+          session: _session!,
+          apiClient: UjikomApiClient(
+            baseUrl: _baseUrl,
+            authToken: _session!.token,
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _logout() async {
     try {
       await _createClient().logout();
@@ -203,6 +152,69 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _session = null;
     });
+  }
+
+  Future<void> _openFaqPage() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => FaqPage(apiClient: _createClient()),
+      ),
+    );
+  }
+
+  Future<void> _openNewsPage() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => NewsPage(apiClient: _createClient()),
+      ),
+    );
+  }
+
+  Future<void> _openBookmarksPage() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => BookmarksPage(apiClient: _createClient()),
+      ),
+    );
+  }
+
+  Future<void> _openHistoryPage() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => HistoryPage(apiClient: _createClient()),
+      ),
+    );
+  }
+
+  Future<void> _openCollectionPage() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => CollectionPage(apiClient: _createClient()),
+      ),
+    );
+  }
+
+  Future<void> _openGenrePage() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => GenrePage(apiClient: _createClient()),
+      ),
+    );
+  }
+
+  Future<void> _openNotificationsPage() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => NotificationsPage(apiClient: _createClient()),
+      ),
+    );
   }
 
   List<WorkSummary> _applyFilters(List<WorkSummary> works) {
@@ -226,24 +238,15 @@ class _HomePageState extends State<HomePage> {
       key: _scaffoldKey,
       drawer: _UserSidebar(
         session: _session,
-        baseUrl: _baseUrl,
         onOpenAuth: _openAuthPage,
-        onOpenPortal: () async {
-          if (_session == null) return;
-          await Navigator.push(
-            context,
-            MaterialPageRoute<void>(
-              builder: (_) => RolePortalPage(
-                session: _session!,
-                apiClient: UjikomApiClient(
-                  baseUrl: _baseUrl,
-                  authToken: _session!.token,
-                ),
-                webBaseUrl: LaravelWebLinks.webBaseFromApi(_baseUrl),
-              ),
-            ),
-          );
-        },
+        onOpenFaq: _openFaqPage,
+        onOpenNews: _openNewsPage,
+        onOpenBookmarks: _openBookmarksPage,
+        onOpenCollection: _openCollectionPage,
+        onOpenGenre: _openGenrePage,
+        onOpenHistory: _openHistoryPage,
+        onOpenNotifications: _openNotificationsPage,
+        onOpenPortal: _openRolePortal,
         onLogout: _logout,
       ),
       appBar: PreferredSize(
@@ -267,28 +270,24 @@ class _HomePageState extends State<HomePage> {
               _TopLink(
                 label: 'FAQ',
                 icon: Icons.help_outline_rounded,
-                onTap: () {
-                  launchUrl(Uri.parse(LaravelWebLinks.faq(_baseUrl)));
-                },
+                onTap: _openFaqPage,
               ),
             if (!isCompact)
               _TopLink(
                 label: 'News',
                 icon: Icons.newspaper_rounded,
-                onTap: () {
-                  launchUrl(Uri.parse(LaravelWebLinks.news(_baseUrl)));
-                },
+                onTap: _openNewsPage,
               ),
+            IconButton(
+              onPressed: _openNotificationsPage,
+              icon: const Icon(Icons.notifications_none_rounded),
+              tooltip: 'Notifications',
+            ),
             _UserAction(
               session: _session,
-              baseUrl: _baseUrl,
+              onOpenPortal: _openRolePortal,
               onLogin: _openAuthPage,
               onLogout: _logout,
-            ),
-            IconButton(
-              onPressed: _openApiConfig,
-              icon: const Icon(Icons.tune_rounded),
-              tooltip: 'Atur API',
             ),
             const SizedBox(width: 12),
           ],
@@ -470,15 +469,27 @@ class _TopLink extends StatelessWidget {
 class _UserSidebar extends StatelessWidget {
   const _UserSidebar({
     required this.session,
-    required this.baseUrl,
     required this.onOpenAuth,
+    required this.onOpenFaq,
+    required this.onOpenNews,
+    required this.onOpenBookmarks,
+    required this.onOpenCollection,
+    required this.onOpenGenre,
+    required this.onOpenHistory,
+    required this.onOpenNotifications,
     required this.onOpenPortal,
     required this.onLogout,
   });
 
   final AuthSession? session;
-  final String baseUrl;
   final Future<void> Function() onOpenAuth;
+  final Future<void> Function() onOpenFaq;
+  final Future<void> Function() onOpenNews;
+  final Future<void> Function() onOpenBookmarks;
+  final Future<void> Function() onOpenCollection;
+  final Future<void> Function() onOpenGenre;
+  final Future<void> Function() onOpenHistory;
+  final Future<void> Function() onOpenNotifications;
   final Future<void> Function() onOpenPortal;
   final Future<void> Function() onLogout;
 
@@ -490,11 +501,14 @@ class _UserSidebar extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            const Row(
+            Row(
               children: [
-                Icon(Icons.close_rounded, color: Colors.white70),
-                SizedBox(width: 16),
-                Expanded(child: NokomiBrand(compact: true)),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                ),
+                const SizedBox(width: 8),
+                const Expanded(child: NokomiBrand(compact: true)),
               ],
             ),
             const SizedBox(height: 28),
@@ -505,19 +519,43 @@ class _UserSidebar extends StatelessWidget {
               onTap: () => Navigator.pop(context),
             ),
             _SidebarLink(
+              icon: Icons.help_outline_rounded,
+              label: 'FAQ',
+              onTap: () async {
+                Navigator.pop(context);
+                await onOpenFaq();
+              },
+            ),
+            _SidebarLink(
+              icon: Icons.newspaper_rounded,
+              label: 'News',
+              onTap: () async {
+                Navigator.pop(context);
+                await onOpenNews();
+              },
+            ),
+            _SidebarLink(
+              icon: Icons.notifications_none_rounded,
+              label: 'Notifications',
+              onTap: () async {
+                Navigator.pop(context);
+                await onOpenNotifications();
+              },
+            ),
+            _SidebarLink(
               icon: Icons.bookmark_rounded,
               label: 'Bookmarks',
-              onTap: () {
-                launchUrl(Uri.parse(
-                    '${LaravelWebLinks.webBaseFromApi(baseUrl)}/bookmarks'));
+              onTap: () async {
+                Navigator.pop(context);
+                await onOpenBookmarks();
               },
             ),
             _SidebarLink(
               icon: Icons.inventory_2_rounded,
               label: 'Collection',
-              onTap: () {
-                launchUrl(Uri.parse(
-                    '${LaravelWebLinks.webBaseFromApi(baseUrl)}/collection'));
+              onTap: () async {
+                Navigator.pop(context);
+                await onOpenCollection();
               },
             ),
             const SizedBox(height: 20),
@@ -525,14 +563,9 @@ class _UserSidebar extends StatelessWidget {
             _SidebarLink(
               icon: Icons.sell_rounded,
               label: 'Genre',
-              trailing:
-                  const Icon(Icons.expand_more_rounded, color: Colors.white54),
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content:
-                          Text('Filter genre akan aku sambungkan berikutnya.')),
-                );
+              onTap: () async {
+                Navigator.pop(context);
+                await onOpenGenre();
               },
             ),
             const SizedBox(height: 20),
@@ -540,9 +573,9 @@ class _UserSidebar extends StatelessWidget {
             _SidebarLink(
               icon: Icons.history_rounded,
               label: 'History',
-              onTap: () {
-                launchUrl(Uri.parse(
-                    '${LaravelWebLinks.webBaseFromApi(baseUrl)}/history'));
+              onTap: () async {
+                Navigator.pop(context);
+                await onOpenHistory();
               },
             ),
             const SizedBox(height: 20),
@@ -577,9 +610,14 @@ class _UserSidebar extends StatelessWidget {
                         session == null ? 'Login / Register' : 'Edit Profile',
                     onTap: () {
                       if (session == null) {
+                        Navigator.pop(context);
                         onOpenAuth();
                       } else {
-                        launchUrl(Uri.parse(LaravelWebLinks.profile(baseUrl)));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Edit profile native belum selesai.'),
+                          ),
+                        );
                       }
                     },
                   ),
@@ -590,7 +628,10 @@ class _UserSidebar extends StatelessWidget {
                     _SidebarActionButton(
                       icon: Icons.dashboard_rounded,
                       label: 'Dashboard',
-                      onTap: onOpenPortal,
+                      onTap: () async {
+                        Navigator.pop(context);
+                        await onOpenPortal();
+                      },
                     ),
                   ],
                   if (session != null) ...[
@@ -599,7 +640,10 @@ class _UserSidebar extends StatelessWidget {
                       icon: Icons.logout_rounded,
                       label: 'Sign Out',
                       danger: true,
-                      onTap: onLogout,
+                      onTap: () async {
+                        Navigator.pop(context);
+                        await onLogout();
+                      },
                     ),
                   ],
                 ],
@@ -639,13 +683,11 @@ class _SidebarLink extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
-    this.trailing,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -656,7 +698,6 @@ class _SidebarLink extends StatelessWidget {
         label,
         style: const TextStyle(color: Color(0xFFE8EAED)),
       ),
-      trailing: trailing,
       onTap: onTap,
     );
   }
@@ -701,13 +742,13 @@ class _SidebarActionButton extends StatelessWidget {
 class _UserAction extends StatelessWidget {
   const _UserAction({
     required this.session,
-    required this.baseUrl,
+    required this.onOpenPortal,
     required this.onLogin,
     required this.onLogout,
   });
 
   final AuthSession? session;
-  final String baseUrl;
+  final Future<void> Function() onOpenPortal;
   final Future<void> Function() onLogin;
   final Future<void> Function() onLogout;
 
@@ -725,19 +766,7 @@ class _UserAction extends StatelessWidget {
       tooltip: 'Akun',
       onSelected: (value) {
         if (value == 'dashboard') {
-          Navigator.push(
-            context,
-            MaterialPageRoute<void>(
-              builder: (_) => RolePortalPage(
-                session: session!,
-                apiClient: UjikomApiClient(
-                  baseUrl: baseUrl,
-                  authToken: session!.token,
-                ),
-                webBaseUrl: LaravelWebLinks.webBaseFromApi(baseUrl),
-              ),
-            ),
-          );
+          onOpenPortal();
           return;
         }
 

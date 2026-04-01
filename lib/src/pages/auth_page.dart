@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/ujikom_api_client.dart';
+import '../widgets/nokomi_brand.dart';
 
 class AuthPage extends StatelessWidget {
   const AuthPage({
@@ -15,26 +16,81 @@ class AuthPage extends StatelessWidget {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Login & Register'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Login'),
-              Tab(text: 'Register'),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.arrow_back_rounded),
+                    ),
+                    const SizedBox(width: 6),
+                    const Expanded(
+                      child: NokomiBrand(
+                        compact: true,
+                        showText: true,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Masuk atau daftar untuk lanjut membaca.',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: const Color(0xFF9AA0A6),
+                            fontWeight: FontWeight.w500,
+                          ),
+                    ),
+                    const SizedBox(height: 18),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF141B24),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFF253042)),
+                      ),
+                      child: const TabBar(
+                        indicatorSize: TabBarIndicatorSize.tab,
+                        dividerColor: Colors.transparent,
+                        indicator: BoxDecoration(
+                          color: Color(0xFF2D8B73),
+                          borderRadius: BorderRadius.all(Radius.circular(16)),
+                        ),
+                        padding: EdgeInsets.all(6),
+                        labelColor: Colors.white,
+                        unselectedLabelColor: Color(0xFF9AA0A6),
+                        tabs: [
+                          Tab(text: 'Login'),
+                          Tab(text: 'Register'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    _AuthForm(
+                      mode: 'login',
+                      apiClient: apiClient,
+                    ),
+                    _AuthForm(
+                      mode: 'register',
+                      apiClient: apiClient,
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
-        ),
-        body: TabBarView(
-          children: [
-            _AuthForm(
-              mode: 'login',
-              apiClient: apiClient,
-            ),
-            _AuthForm(
-              mode: 'register',
-              apiClient: apiClient,
-            ),
-          ],
         ),
       ),
     );
@@ -60,6 +116,8 @@ class _AuthFormState extends State<_AuthForm> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   bool _submitting = false;
 
   bool get isLogin => widget.mode == 'login';
@@ -114,27 +172,46 @@ class _AuthFormState extends State<_AuthForm> {
 
   @override
   Widget build(BuildContext context) {
-    final title = isLogin ? 'Masuk ke akun' : 'Buat akun baru';
+    final title = isLogin ? 'Selamat datang kembali' : 'Buat akun baru';
     final subtitle = isLogin
-        ? 'API Laravel sekarang sudah aktif. Login akan menyimpan token Sanctum ke Flutter.'
-        : 'Registrasi akan langsung membuat akun baru dan login otomatis memakai token dari backend.';
+        ? 'Masuk ke akun Nokomi untuk menyimpan progress baca, bookmark, dan akses dashboard sesuai role.'
+        : 'Daftar akun baru untuk mulai membaca, menyimpan koleksi, dan memakai fitur Nokomi di Android.';
 
     return Form(
       key: _formKey,
       child: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
         children: [
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(28),
               gradient: const LinearGradient(
-                colors: [Color(0xFF0F766E), Color(0xFF115E59)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF13463B),
+                  Color(0xFF1E6F5D),
+                  Color(0xFF2D8B73),
+                ],
               ),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x33146557),
+                  blurRadius: 24,
+                  offset: Offset(0, 14),
+                ),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const Icon(
+                  Icons.auto_stories_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
+                const SizedBox(height: 18),
                 Text(
                   title,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -142,111 +219,190 @@ class _AuthFormState extends State<_AuthForm> {
                         fontWeight: FontWeight.w800,
                       ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
                 Text(
                   subtitle,
                   style: const TextStyle(
-                    color: Color(0xFFCCFBF1),
-                    height: 1.5,
+                    color: Color(0xFFDCF7EF),
+                    height: 1.6,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 20),
-          if (!isLogin) ...[
-            TextFormField(
-              controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Nama'),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Nama wajib diisi.';
-                }
-                return null;
-              },
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF141B24),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: const Color(0xFF253042)),
             ),
-            const SizedBox(height: 12),
-          ],
-          TextFormField(
-            controller: _emailController,
-            keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(labelText: 'Email'),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Email wajib diisi.';
-              }
-              if (!value.contains('@')) {
-                return 'Format email tidak valid.';
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _passwordController,
-            obscureText: true,
-            decoration: const InputDecoration(labelText: 'Password'),
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Password wajib diisi.';
-              }
-              if (!isLogin && value.length < 8) {
-                return 'Password minimal 8 karakter.';
-              }
-              return null;
-            },
-          ),
-          if (!isLogin) ...[
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _confirmPasswordController,
-              obscureText: true,
-              decoration:
-                  const InputDecoration(labelText: 'Konfirmasi Password'),
-              validator: (value) {
-                if (value != _passwordController.text) {
-                  return 'Konfirmasi password tidak cocok.';
-                }
-                return null;
-              },
-            ),
-          ],
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: _submitting ? null : _submit,
-            child: _submitting
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(isLogin ? 'Login' : 'Register'),
-          ),
-          const SizedBox(height: 20),
-          const Card(
-            child: Padding(
-              padding: EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Endpoint yang dipakai Flutter',
-                    style: TextStyle(fontWeight: FontWeight.w800),
+            child: Column(
+              children: [
+                if (!isLogin) ...[
+                  _AuthField(
+                    controller: _nameController,
+                    label: 'Nama',
+                    hintText: 'Masukkan nama lengkap',
+                    prefixIcon: Icons.person_outline_rounded,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Nama wajib diisi.';
+                      }
+                      return null;
+                    },
                   ),
-                  SizedBox(height: 10),
-                  Text('1. POST /api/login'),
-                  SizedBox(height: 6),
-                  Text('2. POST /api/register'),
-                  SizedBox(height: 6),
-                  Text('3. GET /api/me'),
-                  SizedBox(height: 6),
-                  Text('4. POST /api/logout'),
+                  const SizedBox(height: 14),
                 ],
-              ),
+                _AuthField(
+                  controller: _emailController,
+                  label: 'Email',
+                  hintText: 'nama@email.com',
+                  keyboardType: TextInputType.emailAddress,
+                  prefixIcon: Icons.mail_outline_rounded,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Email wajib diisi.';
+                    }
+                    if (!value.contains('@')) {
+                      return 'Format email tidak valid.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 14),
+                _AuthField(
+                  controller: _passwordController,
+                  label: 'Password',
+                  hintText: 'Masukkan password',
+                  prefixIcon: Icons.lock_outline_rounded,
+                  obscureText: _obscurePassword,
+                  suffixIcon: IconButton(
+                    onPressed: () => setState(
+                      () => _obscurePassword = !_obscurePassword,
+                    ),
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_off_rounded
+                          : Icons.visibility_rounded,
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Password wajib diisi.';
+                    }
+                    if (!isLogin && value.length < 8) {
+                      return 'Password minimal 8 karakter.';
+                    }
+                    return null;
+                  },
+                ),
+                if (!isLogin) ...[
+                  const SizedBox(height: 14),
+                  _AuthField(
+                    controller: _confirmPasswordController,
+                    label: 'Konfirmasi Password',
+                    hintText: 'Ulangi password',
+                    prefixIcon: Icons.verified_user_outlined,
+                    obscureText: _obscureConfirmPassword,
+                    suffixIcon: IconButton(
+                      onPressed: () => setState(
+                        () =>
+                            _obscureConfirmPassword = !_obscureConfirmPassword,
+                      ),
+                      icon: Icon(
+                        _obscureConfirmPassword
+                            ? Icons.visibility_off_rounded
+                            : Icons.visibility_rounded,
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value != _passwordController.text) {
+                        return 'Konfirmasi password tidak cocok.';
+                      }
+                      return null;
+                    },
+                  ),
+                ],
+                const SizedBox(height: 22),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: _submitting ? null : _submit,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF8DE5D3),
+                      foregroundColor: const Color(0xFF0A2B2B),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      textStyle: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    child: _submitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(isLogin ? 'Masuk Sekarang' : 'Buat Akun'),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AuthField extends StatelessWidget {
+  const _AuthField({
+    required this.controller,
+    required this.label,
+    required this.hintText,
+    required this.prefixIcon,
+    required this.validator,
+    this.keyboardType,
+    this.obscureText = false,
+    this.suffixIcon,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String hintText;
+  final IconData prefixIcon;
+  final TextInputType? keyboardType;
+  final bool obscureText;
+  final Widget? suffixIcon;
+  final String? Function(String?) validator;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFFE8EAED),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          obscureText: obscureText,
+          validator: validator,
+          decoration: InputDecoration(
+            hintText: hintText,
+            prefixIcon: Icon(prefixIcon),
+            suffixIcon: suffixIcon,
+          ),
+        ),
+      ],
     );
   }
 }
