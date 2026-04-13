@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -29,6 +30,8 @@ class NetworkCover extends StatelessWidget {
       imageUrl,
       fit: fit,
       filterQuality: FilterQuality.medium,
+      webHtmlElementStrategy:
+          kIsWeb ? WebHtmlElementStrategy.prefer : WebHtmlElementStrategy.never,
       errorBuilder: (context, error, stackTrace) {
         return errorWidget ?? const SizedBox.shrink();
       },

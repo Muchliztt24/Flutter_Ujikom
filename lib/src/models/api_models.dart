@@ -1,3 +1,4 @@
+import 'chapter_detail.dart';
 import 'work.dart';
 
 class ApiPageMeta {
@@ -511,6 +512,57 @@ class UploaderDashboardData {
           .toList(),
     );
   }
+}
+
+class UploaderChaptersResponse {
+  const UploaderChaptersResponse({
+    required this.work,
+    required this.chapters,
+  });
+
+  final WorkSummary work;
+  final List<ChapterSummary> chapters;
+}
+
+class ChapterImageItem {
+  const ChapterImageItem({
+    required this.id,
+    required this.chapterId,
+    required this.pageNumber,
+    required this.imageUrl,
+    required this.chapterTitle,
+    required this.workTitle,
+  });
+
+  final int id;
+  final int chapterId;
+  final int pageNumber;
+  final String imageUrl;
+  final String? chapterTitle;
+  final String? workTitle;
+
+  factory ChapterImageItem.fromJson(Map<String, dynamic> json) {
+    final chapter = json['chapter'] as Map<String, dynamic>?;
+    final work = json['work'] as Map<String, dynamic>?;
+    return ChapterImageItem(
+      id: json['id'] as int? ?? 0,
+      chapterId: json['chapter_id'] as int? ?? 0,
+      pageNumber: json['page_number'] as int? ?? 0,
+      imageUrl: json['image_url'] as String? ?? '',
+      chapterTitle: chapter?['title'] as String?,
+      workTitle: work?['title'] as String? ?? (chapter?['work'] as Map<String, dynamic>?)?['title'] as String?,
+    );
+  }
+}
+
+class ChapterImagesResponse {
+  const ChapterImagesResponse({
+    required this.chapter,
+    required this.images,
+  });
+
+  final ChapterDetail chapter;
+  final List<ChapterImageItem> images;
 }
 
 DateTime? _parseDate(String? value) {

@@ -256,6 +256,21 @@ class UjikomApiClient {
     return AuthUser.fromJson(json['user'] as Map<String, dynamic>);
   }
 
+  Future<AuthUser> updateMe({
+    required String name,
+    required String email,
+  }) async {
+    final json = await _patchJson(
+      '/me',
+      requiresAuth: true,
+      body: {
+        'name': name,
+        'email': email,
+      },
+    );
+    return AuthUser.fromJson(json['user'] as Map<String, dynamic>);
+  }
+
   Future<void> logout() async {
     await _postJson('/logout', requiresAuth: true);
   }
@@ -305,6 +320,24 @@ class UjikomApiClient {
     );
   }
 
+  Future<AdminUserItem> updateAdminUser({
+    required int userId,
+    required String name,
+    required String email,
+    required int roleId,
+  }) async {
+    final json = await _patchJson(
+      '/admin/users/$userId',
+      requiresAuth: true,
+      body: {
+        'name': name,
+        'email': email,
+        'role_id': roleId,
+      },
+    );
+    return AdminUserItem.fromJson(json['data'] as Map<String, dynamic>);
+  }
+
   Future<List<GenreItem>> fetchAdminGenres({
     String? query,
   }) async {
@@ -319,6 +352,31 @@ class UjikomApiClient {
     return rawData
         .map((item) => GenreItem.fromJson(item as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<GenreItem> createAdminGenre(String name) async {
+    final json = await _postJson(
+      '/admin/genres',
+      requiresAuth: true,
+      body: {'name': name},
+    );
+    return GenreItem.fromJson(json['data'] as Map<String, dynamic>);
+  }
+
+  Future<GenreItem> updateAdminGenre({
+    required int genreId,
+    required String name,
+  }) async {
+    final json = await _patchJson(
+      '/admin/genres/$genreId',
+      requiresAuth: true,
+      body: {'name': name},
+    );
+    return GenreItem.fromJson(json['data'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteAdminGenre(int genreId) async {
+    await _deleteJson('/admin/genres/$genreId', requiresAuth: true);
   }
 
   Future<WorksPageResponse> fetchAdminWorks({
@@ -369,7 +427,11 @@ class UjikomApiClient {
         .toList();
   }
 
-  Future<List<Map<String, dynamic>>> fetchAdminChapterImages({
+  Future<void> deleteAdminChapter(int chapterId) async {
+    await _deleteJson('/admin/chapters/$chapterId', requiresAuth: true);
+  }
+
+  Future<List<ChapterImageItem>> fetchAdminChapterImages({
     int? workId,
     int? chapterId,
   }) async {
@@ -382,7 +444,13 @@ class UjikomApiClient {
       },
     );
     final rawData = json['data'] as List<dynamic>? ?? const [];
-    return rawData.cast<Map<String, dynamic>>();
+    return rawData
+        .map((item) => ChapterImageItem.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> deleteAdminChapterImage(int imageId) async {
+    await _deleteJson('/admin/chapter-images/$imageId', requiresAuth: true);
   }
 
   Future<void> approveAdminWork(int workId) async {
@@ -428,15 +496,203 @@ class UjikomApiClient {
     );
   }
 
-  Future<List<ChapterSummary>> fetchUploaderChapters(int workId) async {
+  Future<WorkSummary> createUploaderWork({
+    required String title,
+    required String originalAuthor,
+    required String type,
+    required List<int> genreIds,
+    String? description,
+    String? coverPath,
+  }) async {
+    final json = await _sendMultipart(
+      path: '/uploader/works',
+      requiresAuth: true,
+      fields: {
+        'title': title,
+        'original_author': originalAuthor,
+        'type': type,
+        if (description != null && description.trim().isNotEmpty)
+          'description': description.trim(),
+        ..._arrayFields('genre_ids', genreIds.map((e) => '$e').toList()),
+      },
+      files: [
+        if (coverPath != null && coverPath.isNotEmpty)
+          _MultipartFileSpec(field: 'cover', path: coverPath),
+      ],
+    );
+    return WorkSummary.fromJson(json['data'] as Map<String, dynamic>);
+  }
+
+  Future<WorkSummary> updateUploaderWork({
+    required int workId,
+    required String title,
+    required String originalAuthor,
+    required String type,
+    required List<int> genreIds,
+    String? description,
+    String? coverPath,
+  }) async {
+    final json = await _sendMultipart(
+      path: '/uploader/works/$workId',
+      requiresAuth: true,
+      methodOverride: 'PATCH',
+      fields: {
+        'title': title,
+        'original_author': originalAuthor,
+        'type': type,
+        if (description != null && description.trim().isNotEmpty)
+          'description': description.trim(),
+        ..._arrayFields('genre_ids', genreIds.map((e) => '$e').toList()),
+      },
+      files: [
+        if (coverPath != null && coverPath.isNotEmpty)
+          _MultipartFileSpec(field: 'cover', path: coverPath),
+      ],
+    );
+    return WorkSummary.fromJson(json['data'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteUploaderWork(int workId) async {
+    await _deleteJson('/uploader/works/$workId', requiresAuth: true);
+  }
+
+  Future<void> submitUploaderWork(int workId) async {
+    await _postJson('/uploader/works/$workId/submit', requiresAuth: true);
+  }
+
+  Future<UploaderChaptersResponse> fetchUploaderChapters(int workId) async {
     final json = await _getJson(
       '/uploader/works/$workId/chapters',
       requiresAuth: true,
     );
     final rawData = json['data'] as List<dynamic>? ?? const [];
+    return UploaderChaptersResponse(
+      work: WorkSummary.fromJson(json['work'] as Map<String, dynamic>),
+      chapters: rawData
+          .map((item) => ChapterSummary.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  Future<ChapterDetail> fetchUploaderChapter({
+    required int workId,
+    required int chapterId,
+  }) async {
+    final json = await _getJson(
+      '/uploader/works/$workId/chapters/$chapterId',
+      requiresAuth: true,
+    );
+    return ChapterDetail.fromJson(json['data'] as Map<String, dynamic>);
+  }
+
+  Future<ChapterDetail> createUploaderChapter({
+    required int workId,
+    required int chapterNumber,
+    String? title,
+    String? textContent,
+  }) async {
+    final json = await _postJson(
+      '/uploader/works/$workId/chapters',
+      requiresAuth: true,
+      body: {
+        'chapter_number': chapterNumber,
+        if (title != null && title.trim().isNotEmpty) 'title': title.trim(),
+        if (textContent != null) 'text_content': textContent,
+      },
+    );
+    return ChapterDetail.fromJson(json['data'] as Map<String, dynamic>);
+  }
+
+  Future<ChapterDetail> updateUploaderChapter({
+    required int workId,
+    required int chapterId,
+    required int chapterNumber,
+    String? title,
+    String? textContent,
+  }) async {
+    final json = await _patchJson(
+      '/uploader/works/$workId/chapters/$chapterId',
+      requiresAuth: true,
+      body: {
+        'chapter_number': chapterNumber,
+        'title': title?.trim(),
+        'text_content': textContent,
+      },
+    );
+    return ChapterDetail.fromJson(json['data'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteUploaderChapter({
+    required int workId,
+    required int chapterId,
+  }) async {
+    await _deleteJson(
+      '/uploader/works/$workId/chapters/$chapterId',
+      requiresAuth: true,
+    );
+  }
+
+  Future<ChapterImagesResponse> fetchUploaderChapterImages(int chapterId) async {
+    final json = await _getJson(
+      '/uploader/chapters/$chapterId/images',
+      requiresAuth: true,
+    );
+    final rawData = json['data'] as List<dynamic>? ?? const [];
+    return ChapterImagesResponse(
+      chapter: ChapterDetail.fromJson(json['chapter'] as Map<String, dynamic>),
+      images: rawData
+          .map((item) => ChapterImageItem.fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  Future<List<ChapterImageItem>> createUploaderChapterImages({
+    required int chapterId,
+    required List<String> imagePaths,
+  }) async {
+    final json = await _sendMultipart(
+      path: '/uploader/chapters/$chapterId/images',
+      requiresAuth: true,
+      files: imagePaths
+          .where((path) => path.isNotEmpty)
+          .map((path) => _MultipartFileSpec(field: 'images[]', path: path))
+          .toList(),
+    );
+    final rawData = json['data'] as List<dynamic>? ?? const [];
     return rawData
-        .map((item) => ChapterSummary.fromJson(item as Map<String, dynamic>))
+        .map((item) => ChapterImageItem.fromJson(item as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<ChapterImageItem> updateUploaderChapterImage({
+    required int chapterId,
+    required int imageId,
+    required int pageNumber,
+    String? imagePath,
+  }) async {
+    final json = await _sendMultipart(
+      path: '/uploader/chapters/$chapterId/images/$imageId',
+      requiresAuth: true,
+      methodOverride: 'PATCH',
+      fields: {
+        'page_number': '$pageNumber',
+      },
+      files: [
+        if (imagePath != null && imagePath.isNotEmpty)
+          _MultipartFileSpec(field: 'image', path: imagePath),
+      ],
+    );
+    return ChapterImageItem.fromJson(json['data'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteUploaderChapterImage({
+    required int chapterId,
+    required int imageId,
+  }) async {
+    await _deleteJson(
+      '/uploader/chapters/$chapterId/images/$imageId',
+      requiresAuth: true,
+    );
   }
 
   Future<Map<String, dynamic>> _getJson(
@@ -472,6 +728,21 @@ class UjikomApiClient {
     return _decodeResponse(response);
   }
 
+  Future<Map<String, dynamic>> _patchJson(
+    String path, {
+    Map<String, dynamic>? body,
+    bool requiresAuth = false,
+  }) async {
+    final uri = Uri.parse('$_baseUrl$path');
+    final response = await _httpClient.patch(
+      uri,
+      headers: _headers(requiresAuth: requiresAuth),
+      body: body == null ? null : jsonEncode(body),
+    );
+
+    return _decodeResponse(response);
+  }
+
   Future<Map<String, dynamic>> _deleteJson(
     String path, {
     bool requiresAuth = false,
@@ -485,10 +756,47 @@ class UjikomApiClient {
     return _decodeResponse(response);
   }
 
+  Future<Map<String, dynamic>> _sendMultipart({
+    required String path,
+    required bool requiresAuth,
+    Map<String, String>? fields,
+    List<_MultipartFileSpec> files = const [],
+    String? methodOverride,
+  }) async {
+    final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl$path'));
+    request.headers.addAll(_multipartHeaders(requiresAuth: requiresAuth));
+    if (fields != null && fields.isNotEmpty) {
+      request.fields.addAll(fields);
+    }
+    if (methodOverride != null && methodOverride.isNotEmpty) {
+      request.fields['_method'] = methodOverride;
+    }
+
+    for (final file in files) {
+      request.files.add(await http.MultipartFile.fromPath(file.field, file.path));
+    }
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+    return _decodeResponse(response);
+  }
+
   Map<String, String> _headers({bool requiresAuth = false}) {
     final headers = <String, String>{
       'Accept': 'application/json',
       'Content-Type': 'application/json',
+    };
+
+    if (requiresAuth && authToken != null && authToken!.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $authToken';
+    }
+
+    return headers;
+  }
+
+  Map<String, String> _multipartHeaders({bool requiresAuth = false}) {
+    final headers = <String, String>{
+      'Accept': 'application/json',
     };
 
     if (requiresAuth && authToken != null && authToken!.isNotEmpty) {
@@ -532,6 +840,14 @@ class UjikomApiClient {
     return decoded;
   }
 
+  Map<String, String> _arrayFields(String key, List<String> values) {
+    final fields = <String, String>{};
+    for (var index = 0; index < values.length; index++) {
+      fields['$key[$index]'] = values[index];
+    }
+    return fields;
+  }
+
   static String _normalizeBaseUrl(String value) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) {
@@ -555,4 +871,14 @@ class ApiException implements Exception {
 
   @override
   String toString() => message;
+}
+
+class _MultipartFileSpec {
+  const _MultipartFileSpec({
+    required this.field,
+    required this.path,
+  });
+
+  final String field;
+  final String path;
 }
